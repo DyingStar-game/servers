@@ -1,0 +1,64 @@
+
+services:
+  zero:
+    image: dgraph/dgraph:${DB_DGRAPH_VERSION}
+    container_name: dgraph-zero
+    environment:
+      DGRAPH_LICENSE: "<clé>"
+    volumes:
+      - dgraph:/dgraph
+    ports:
+      - 5080:5080
+      - 6080:6080
+    restart: on-failure
+    command: dgraph zero --my=zero:5080
+
+  alpha:
+    image: dgraph/dgraph:${DB_DGRAPH_VERSION}
+    container_name: dgraph-alpha
+    environment:
+      DGRAPH_LICENSE: "<clé>"
+    volumes:
+      - dgraph:/dgraph
+    ports:
+      - 8080:8080
+      - 9080:9080
+    restart: on-failure
+    command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --security whitelist=0.0.0.0/0 --limit "mutations=strict" --logtostderr --v=5   --limit txn-abort-after=5s --limit pending-proposals=8192 --limit max_retries=20 --cache="size-mb=8192" --badger="compression=zstd"
+  
+  alpha1:
+    image: dgraph/dgraph:${DB_DGRAPH_VERSION}
+    container_name: dgraph-alpha1
+    environment:
+      DGRAPH_LICENSE: "<clé>"
+    volumes:
+      - dgraph1:/dgraph
+    restart: on-failure
+    command: dgraph alpha --my=alpha1:7080 --zero=zero:5080 --security whitelist=0.0.0.0/0 --limit "mutations=strict" --logtostderr --v=5 --limit txn-abort-after=5s --limit pending-proposals=8192 --limit max_retries=20 --cache="size-mb=8192" --badger="compression=zstd"
+  alpha2:
+    image: dgraph/dgraph:${DB_DGRAPH_VERSION}
+    container_name: dgraph-alpha2
+    environment:
+      DGRAPH_LICENSE: "<clé>"
+    volumes:
+      - dgraph2:/dgraph
+    restart: on-failure
+    command: dgraph alpha --my=alpha2:7080 --zero=zero:5080 --security whitelist=0.0.0.0/0 --limit "mutations=strict" --logtostderr --v=5 --limit txn-abort-after=5s --limit pending-proposals=8192 --limit max_retries=20 --cache="size-mb=8192" --badger="compression=zstd"
+  ratel:
+    image: dgraph/ratel:${DB_DGRAPH_VERSION}
+    container_name: dgraph-ratel
+    volumes:
+      - type: volume
+        source: dgraph
+        target: /dgraph
+        volume:
+          nocopy: true
+    ports:
+      - 8000:8000
+    command: dgraph-ratel
+
+
+volumes:
+  dgraph:
+  dgraph1:
+  dgraph2:
