@@ -1,0 +1,15 @@
+version: "3.7"
+ 
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mqtt-chat
+    container_name: mqtt-chat
+    restart: unless-stopped
+    ports:
+      - "1884:1883"
+      - "9002:9001"
+    volumes:
+      - ./mosquitto:/etc/mosquitto
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
