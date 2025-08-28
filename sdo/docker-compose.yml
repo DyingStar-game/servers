@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mqtt-sdo
+    container_name: mqtt-sdo
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto:/etc/mosquitto
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+
+  mariadb:    
+    image: mariadb:latest
+    hostname: mariadb
+    environment:  
+      MYSQL_DATABASE: sdo
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 1
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    hostname: app
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    volumes: 
+      - ./script:/script
+    command: [ "/script/runsdo.sh" ]
+
