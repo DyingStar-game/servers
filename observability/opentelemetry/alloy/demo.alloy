@@ -1,0 +1,57 @@
+prometheus.remote_write "local" {
+    endpoint {
+        url = "http://mimir:8080/api/v1/push"
+        headers = {
+            "X-Scope-OrgID" = "test",
+        }
+    }
+}
+
+loki.process "local_loki_process" {
+    forward_to = [
+        loki.write.to_loki.receiver,
+    ]
+}
+
+loki.write "to_loki" {
+    endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+    }
+
+     external_labels = {
+        app = "DyingStar",
+    }
+}
+
+otelcol.exporter.otlp "local" {
+    client {
+        endpoint = "tempo:4317"
+        tls {
+            insecure             = true
+            insecure_skip_verify = true
+        }
+    }
+}
+
+
+otelcol.exporter.prometheus "to_prometheus" {
+    forward_to = [
+        prometheus.remote_write.local.receiver,
+    ]
+}
+
+otelcol.exporter.loki "to_loki" {
+    forward_to = [
+        loki.process.local_loki_process.receiver,
+    ]
+}
+
+otelcol.receiver.otlp "default" {
+    grpc {}
+    http {}
+    output {
+        metrics = [otelcol.exporter.prometheus.to_prometheus.input]
+        logs = [otelcol.exporter.loki.to_loki.input]
+        traces  = [otelcol.exporter.otlp.local.input]
+    }
+}
