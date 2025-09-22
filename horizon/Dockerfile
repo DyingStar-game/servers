@@ -66,62 +66,29 @@ RUN --mount=type=cache,target=/app/target/ \
     fi && \
     cp ./target/release/horizon /app/server
 
-# Build plugins as dynamic libraries
+# Build plugins as dynamic libraries (sortie réduite)
 COPY --from=fetcher /src/plugins_repo ./plugins_src
 RUN --mount=type=cache,target=/app/target/ \
     --mount=type=cache,target=/usr/local/cargo/git/db \
     --mount=type=cache,target=/usr/local/cargo/registry/ \
-    mkdir -p /app/plugins && \
-    echo "==> Auto-detecting plugins in plugins_src..." && \
-    # Find all directories containing Cargo.toml with cdylib crate-type
-    for plugin_dir in plugins_src/*/; do \
-      if [ -d "$plugin_dir" ] && [ -f "$plugin_dir/Cargo.toml" ]; then \
-        plugin_name=$(basename "$plugin_dir"); \
-        echo "==> Checking $plugin_name for plugin markers..."; \
-        # Check if this is a plugin (has cdylib crate-type)
-        if grep -q 'crate-type.*=.*\["cdylib"\]' "$plugin_dir/Cargo.toml" || \
-           grep -q 'crate-type.*=.*\[.*"cdylib".*\]' "$plugin_dir/Cargo.toml"; then \
-          echo "==> Found plugin: $plugin_name"; \
-          cd "$plugin_dir"; \
-          # Fix path to horizon crates
-          sed -i 's|../Horizon/crates/|../../crates/|g' Cargo.toml; \
-          # Add empty workspace section to prevent workspace confusion
-          if ! grep -q '^\[workspace\]' Cargo.toml; then \
-            echo "" >> Cargo.toml; \
-            echo "[workspace]" >> Cargo.toml; \
-          fi; \
-          echo "==> Modified Cargo.toml for $plugin_name:"; \
-          cat Cargo.toml; \
-          echo "==> Building plugin $plugin_name..."; \
-          # Build the plugin as cdylib and capture any errors
-          BUILD_OUTPUT=$(mktemp); \
-          if [ -f Cargo.lock ]; then \
-            cargo build --locked --release 2>&1 | tee "$BUILD_OUTPUT"; \
-          else \
-            cargo build --release 2>&1 | tee "$BUILD_OUTPUT"; \
-          fi; \
-          BUILD_EXIT_CODE=$?; \
-          echo "==> Build exit code for $plugin_name: $BUILD_EXIT_CODE"; \
-          if [ $BUILD_EXIT_CODE -ne 0 ]; then \
-            echo "==> ❌ COMPILATION FAILED for $plugin_name"; \
-            echo "==> Error details:"; \
-            grep -E "error\[|error:|warning:" "$BUILD_OUTPUT" | head -20; \
-          else \
-            echo "==> ✅ COMPILATION SUCCESSFUL for $plugin_name"; \
-          fi; \
-          rm -f "$BUILD_OUTPUT"; \
-          # Show what was built
-          echo "==> Built files for $plugin_name:"; \
-          echo "==> Looking for main plugin .so file:"; \
-          find target/release -maxdepth 1 -name "libplugin_*.so" -type f; \
-          # Copy the resulting .so file to plugins directory (only main plugin files, not deps)
-          find target/release -maxdepth 1 -name "libplugin_*.so" -exec cp {} /app/plugins/ \; || true; \
-          cd /app; \
-        else \
-          echo "==> Skipping $plugin_name (not a cdylib plugin)"; \
-        fi; \
+    bash -euxc 'mkdir -p /app/plugins; \
+    plugins_built=""; \
+    for cargo_file in plugins_src/*/Cargo.toml; do \
+      [ -f "${cargo_file}" ] || continue; \
+      plugin_dir=$(dirname "${cargo_file}"); \
+      plugin_name=$(basename "${plugin_dir}"); \
+      if grep -q "crate-type.*cdylib" "${cargo_file}"; then \
+        echo "[plugin] ${plugin_name}"; \
+        cd "${plugin_dir}"; \
+        sed -i "s|../Horizon/crates/|../../crates/|g" Cargo.toml; \
+        if ! grep -q "^\\[workspace\\]" Cargo.toml; then echo "" >> Cargo.toml; echo "[workspace]" >> Cargo.toml; fi; \
+        if [ -f Cargo.lock ]; then cargo build --locked --release -q || cargo build --locked --release; else cargo build --release -q || cargo build --release; fi; \
+        find target/release -maxdepth 1 -name "libplugin_*.so" -exec cp {} /app/plugins/ \; 2>/dev/null || true; \
+        plugins_built="${plugins_built} ${plugin_name}"; \
+        cd /app; \
       fi; \
-    done
+    done; \
+    echo "Plugins: ${plugins_built:-aucun}"'
 
 #############################################
 # Stage 3: distroless runtime (final)
