@@ -16,7 +16,6 @@ jobs:
   docker-image:
     name: Build production Docker image
     runs-on: ubuntu-latest
-    needs: build
     permissions:
       contents: read
       packages: write
