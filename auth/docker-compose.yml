@@ -1,0 +1,85 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --providers.docker=true
+      - --providers.docker.network=proxy
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.le.acme.email=${EMAIL_LETSENCRYPT}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.le.acme.caserver=${ACME_CASERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - --api.dashboard=true
+      - --api.insecure=false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.srv934816.hstgr.cloud`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=le"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=auth-traefik@docker"
+      - "traefik.http.middlewares.auth-traefik.basicauth.usersfile=/auth/.htpasswd"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - le-storage:/letsencrypt
+      - ./traefik/.htpasswd:/auth/.htpasswd
+    networks:
+      - proxy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ds-auth-server
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ds-auth-server"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  keycloak:
+    image: keycloak/keycloak:26.3.2-0
+    restart: unless-stopped
+    command: >
+      start
+      --hostname ${DOMAIN_AUTH}
+      --proxy-headers xforwarded
+      --db postgres
+      --db-url jdbc:postgresql://db:5432/ds-auth-server
+      --db-username ${DB_USER}
+      --db-password ${DB_PASSWORD}
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kc.rule=Host(`${DOMAIN_AUTH}`)"
+      - "traefik.http.routers.kc.entrypoints=websecure"
+      - "traefik.http.routers.kc.tls.certresolver=le"
+      - "traefik.http.services.kc.loadbalancer.server.port=8080"
+    networks:
+      - proxy
+      - internal
+
+volumes:
+  db-data:
+  le-storage:
+
+networks:
+  proxy:
+  internal:
