@@ -1,4 +1,3 @@
-
 services:
   zero:
     image: dgraph/dgraph:${DB_DGRAPH_VERSION}
@@ -8,8 +7,8 @@ services:
     volumes:
       - dgraph:/dgraph
     ports:
-      - 5080:5080
-      - 6080:6080
+      - ${DGRAPH_ZERO_PORT_5080}:5080
+      - ${DGRAPH_ZERO_PORT_6080}:6080
     restart: on-failure
     command: dgraph zero --my=zero:5080
 
@@ -21,8 +20,8 @@ services:
     volumes:
       - dgraph:/dgraph
     ports:
-      - 8080:8080
-      - 9080:9080
+      - ${DGRAPH_ALPHA_PORT_8080}:8080
+      - ${DGRAPH_ALPHA_PORT_9080}:9080
     restart: on-failure
     command: dgraph alpha --my=alpha:7080 --zero=zero:5080 --security whitelist=0.0.0.0/0 --limit "mutations=strict" --logtostderr --v=5   --limit txn-abort-after=5s --limit pending-proposals=8192 --limit max_retries=20 --cache="size-mb=8192" --badger="compression=zstd"
   
@@ -54,7 +53,7 @@ services:
         volume:
           nocopy: true
     ports:
-      - 8000:8000
+      - ${DGRAPH_RATEL_PORT}:8000
     command: dgraph-ratel
 
 

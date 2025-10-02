@@ -1,0 +1,4 @@
+include:
+  - ./horizon/docker-compose.yml
+  - ./sdo/docker-compose.yml
+  - ./persistInfra/docker-compose.yml
