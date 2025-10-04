@@ -1,0 +1,15 @@
+version: "3.7"
+ 
+services:
+  mosquitto:
+    image: eclipse-mosquitto
+    hostname: mqtt-metrics
+    container_name: mqtt-metrics
+    restart: unless-stopped
+    ports:
+      - "1885:1883"
+      - "9003:9001"
+    volumes:
+      - ./mosquitto:/etc/mosquitto
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
