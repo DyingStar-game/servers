@@ -1,0 +1,78 @@
+services:
+  alloy:
+    image: grafana/alloy
+    container_name: demo-alloy
+    networks:
+     - observability
+    ports:
+      - "12345:12345"
+      - "12347:12347"
+      - "4357:4317"
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - ./opentelemetry/alloy/:/etc/alloy/
+      - ./data/alloy:/var/lib/alloy/data
+    command: [
+      "run",
+      "--server.http.listen-addr=0.0.0.0:12345",
+      "--storage.path=/var/lib/alloy/data" ,
+      "--stability.level=experimental" ,
+      "/etc/alloy/"
+    ]
+
+  mimir:
+    networks:
+     - observability
+    image: grafana/mimir:latest
+    container_name: demo-mimir
+    command:
+      - "--config.file=/etc/mimir.yml"
+    volumes:
+      - ./opentelemetry/mimir/mimir.yml:/etc/mimir.yml
+      - ./data/mimir:/data
+    hostname: mimir
+
+  grafana:
+    networks:
+     - observability
+    image: grafana/grafana:latest
+    container_name: demo-grafana
+    ports:
+      - "3000:3000" # Interface web
+
+  loki:
+    networks:
+     - observability
+    image: grafana/loki
+    container_name: demo-loki
+  #
+  tempo-init:
+    networks:
+     - observability
+    image: &tempoImage grafana/tempo:2.6.1
+    container_name: demo-tempo-init
+    user: root
+    entrypoint:
+      - "chown"
+      - "10001:10001"
+      - "/var/tempo"
+    volumes:
+      - ./data/tempo:/var/tempo
+
+
+  tempo:
+    networks:
+     - observability
+    image: *tempoImage
+    container_name: demo-tempo
+    command: [ "-config.file=/etc/tempo.yml" ]
+    volumes:
+      - ./data/tempo:/var/tempo
+      - ./opentelemetry/tempo/tempo.yml:/etc/tempo.yml
+    depends_on:
+      - tempo-init
+
+networks:
+  observability:
+    name: observability
